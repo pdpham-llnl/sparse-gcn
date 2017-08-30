@@ -1,7 +1,8 @@
-
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse import csr_matrix as spm
+
+from eval import eval_numerical_gradient_array,rel_error
 
 def __expmulit(A,v,scalar=1,k=0):
 	'''
@@ -16,8 +17,9 @@ def __expmulit(A,v,scalar=1,k=0):
 	
 	assert len(scalar) > 0
 
+	scalar = scalar[::-1]
+
 	n = A.shape[0]
-	I = sp.eye(n)
 	res = scalar[0]*A.dot(v)
 	yield res
 	
@@ -30,23 +32,18 @@ def expmulit(A,v,scalar=1,k=0):
 	return r
 
 def iter_expmulit(A,v,scalar=1,k=0):
-	return __expmulit(A,v,scalar,k)
+	
+	if isinstance(scalar,(int,float)):
+		scalar = [scalar]*k
+	
+	assert len(scalar) > 0
 
-def test_expmulit():
-
-	n = 5
-	A = sp.rand(n,n,density=1,format='csr')
-	v = np.random.rand(n)	
-
-	u1 = .7*A.dot(v) + \
-		 .6*(A.dot(A)).dot(v) + \
-		 .5*(A.dot(A).dot(A)).dot(v)
-	u2 = expmulit(A,v,[.5,.6,.7])
-
-	print('u2',u2)
-
-	assert (u1 == u2).all(), print(u1,'\n',u2)
-	print('Correct')
+	scalar = scalar[::-1]
+	
+	exp = v
+	for c in scalar:
+		exp = A.dot(exp)
+		yield c*exp
 
 def gcn_fw(L,X,Theta):
 
@@ -65,19 +62,6 @@ def gcn_fw(L,X,Theta):
 	cache = (L,X,Theta)
 	return out, cache
 
-def test_gcn_fw():
-	N = 2
-	n = 5
-	L = [sp.eye(n,format='csr') for i in range(N)]
-	X = np.ones((N,n))
-	Theta = [.3,.4]
-
-	Y,_ = gcn_fw(L,X,Theta)
-	correct = np.ones((N,n))*.7
-
-	assert (Y == correct).all(), print(Y)
-	print('Correct')
-
 def gcn_bw(dout,cache):
 	'''
 	X: shape(N,n)
@@ -90,26 +74,62 @@ def gcn_bw(dout,cache):
 	N = X.shape[0]
 	K = len(Theta)
 
-	dX = np.array([expmulit(L[i],dout[i],Theta) for i in range(N)])
+	dX = np.array([expmulit(L[i].T,dout[i],Theta) for i in range(N)])
 	dTheta = [.0]*K
 
 	for i in range(N):
-		for k,theta_k in enumerate(iter_expmulit(L[i],X[i],scalar=1,k=K)):
+		for k,theta_k in enumerate(iter_expmulit(L[i],X[i],scalar=1.0,k=K)):
 			dTheta[k] += dout[i].dot(theta_k)
 
 	return dX,dTheta
 
-def test_gcn_bw():
-	
-	N = 2
-	n = 5
-	L = [sp.eye(n,format='csr') for i in range(N)]
-	X = np.ones((N,n))
-	Theta = [.3,.4]
+def relu_fw(X):
+	out = np.maximum(0,X)
 
-	Y,cache = gcn_fw(L,X,Theta)
+	cache = X
+	return out,cache
 
-	dX,dTheta = gcn_bw(Y,cache)
-	print(dX)
-	print(dTheta)
-	
+def relu_bw(dout,cache):
+	X = cache
+
+	dX = dout * (X >= 0)
+
+	return dX
+
+def gcn_relu_fw(L,X,Theta):
+
+	out_gcn, cache_gcn = gcn_fw(L,X,Theta)
+	out_relu, cache_relu = relu_fw(out_gcn)
+
+	cache = (cache_gcn,cache_relu)
+	return out_relu, cache
+
+def gcn_relu_bw(dout,cache):
+
+	cache_gcn,cache_relu = cache
+
+	dout_relu = relu_bw(dout,cache_relu)
+	dout_gcn = gcn_bw(dout_relu,cache_gcn)
+
+	return dout_gcn
+
+def sum_out_fw(W,X):
+	'''
+	X: shape(N,n)
+	W: shape(n_label,)
+	'''
+
+	out = np.dot(np.sum(X,axis=1).reshape(-1,1),
+				W.reshape(1,-1))
+	cache = W,X
+
+	return out,cache
+
+def sum_out_bw(dout,cache):
+	W,X = cache
+	dX = np.dot(
+			dout.dot(W.reshape(-1,1)),
+			np.ones((1,X.shape[1])))	
+	dW = np.dot(X.transpose(),dout).sum(axis=0)
+
+	return dX,dW
