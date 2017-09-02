@@ -317,5 +317,28 @@ def test_onelayer_gcn():
 		assert_diff(grad,grad_num,1e-8)
 
 
+def sanity_check():
+	from solver import Solver
+	N,n,l,K=20,10,3,10
+	model = OneLayer(N,K,l,reg=.0)
+	data = {
+		'X_train':np.random.rand(N,n),
+		'L_train':[sp.rand(n,n,density=1.0,format='csr') for i in range(N)],
+		'y_train':np.random.randint(0,l,size=N),
+		'X_val':np.random.rand(N,n),
+		'L_val':[sp.rand(n,n,density=1.0,format='csr') for i in range(N)],
+		'y_val':np.random.randint(0,l,size=N)
+	}
+
+	solver = Solver(model,
+					data,
+					update_rule = 'sgd_momentum',
+					batch_size = 3,
+					num_epochs=1000,
+					optim_config={
+						  'learning_rate': 1e-2,
+						},
+				   )
+
 
 

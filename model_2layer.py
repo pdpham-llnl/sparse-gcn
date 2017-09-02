@@ -22,6 +22,7 @@ class OneLayer():
 
 	def loss(self,X,L,Y=None):
 
+
 		out_gcnrelu1,cache_gcnrelu1 = gcn_relu_fw(L,X,self.params['Theta1'])
 		out_sum2, cache_sum2 = sum_out_fw(self.params['W2'],out_gcnrelu1)
 
@@ -43,31 +44,5 @@ class OneLayer():
 
 		grads = {'Theta1':dtheta1,'W2':dw2}
 		return loss,grads
-
-	def loss_test(self,X,L,Y=None):
-
-		out_gcnrelu1,cache_gcnrelu1 = gcn_relu_fw(L,X,self.params['Theta1'])
-		out_sum2, cache_sum2 = sum_out_fw(self.params['W2'],out_gcnrelu1)
-
-		scores = out_sum2
-
-		if Y is None:
-			return scores
-
-		loss,dout = softmax_loss(scores,Y)
-
-		loss += self.reg * .5 * ( LA.norm(self.params['Theta1'])**2 +
-								  LA.norm(self.params['W2'])**2)
-
-		dx2,dw2 = sum_out_bw(dout,cache_sum2)
-		dw2 += self.reg * self.params['W2']
-
-		return dx2
-		# dx1,dtheta1 = gcn_relu_bw(dx2,cache_gcnrelu1)
-		# dtheta1 += self.reg * self.params['Theta1']
-
-		# grads = {'Theta1':dtheta1,'W2':dw2}
-		# return loss,grads
-
 
 

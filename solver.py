@@ -116,9 +116,13 @@ class Solver(object):
         """
         self.model = model
         self.X_train = data['X_train']
+        self.L_train = data['L_train']        
         self.y_train = data['y_train']
+
         self.X_val = data['X_val']
+        self.L_val = data['L_val']        
         self.y_val = data['y_val']
+
 
         # Unpack keyword arguments
         self.update_rule = kwargs.pop('update_rule', 'sgd')
@@ -176,10 +180,11 @@ class Solver(object):
         num_train = self.X_train.shape[0]
         batch_mask = np.random.choice(num_train, self.batch_size)
         X_batch = self.X_train[batch_mask]
+        L_batch = [self.L_train[i] for i in batch_mask]
         y_batch = self.y_train[batch_mask]
 
         # Compute loss and gradient
-        loss, grads = self.model.loss(X_batch, y_batch)
+        loss, grads = self.model.loss(X_batch, L_batch, y_batch)
         self.loss_history.append(loss)
 
         # Perform a parameter update
@@ -213,7 +218,7 @@ class Solver(object):
             pickle.dump(checkpoint, f)
 
 
-    def check_accuracy(self, X, y, num_samples=None, batch_size=100):
+    def check_accuracy(self, X, L, y, num_samples=None, batch_size=100):
         """
         Check accuracy of the model on the provided data.
 
@@ -235,7 +240,7 @@ class Solver(object):
         if num_samples is not None and N > num_samples:
             mask = np.random.choice(N, num_samples)
             N = num_samples
-            X = X[mask]
+            X = X[mask]            
             y = y[mask]
 
         # Compute predictions in batches
@@ -246,7 +251,7 @@ class Solver(object):
         for i in range(num_batches):
             start = i * batch_size
             end = (i + 1) * batch_size
-            scores = self.model.loss(X[start:end])
+            scores = self.model.loss(X[start:end],L[start:end])
             y_pred.append(np.argmax(scores, axis=1))
         y_pred = np.hstack(y_pred)
         acc = np.mean(y_pred == y)
@@ -283,9 +288,9 @@ class Solver(object):
             first_it = (t == 0)
             last_it = (t == num_iterations - 1)
             if first_it or last_it or epoch_end:
-                train_acc = self.check_accuracy(self.X_train, self.y_train,
+                train_acc = self.check_accuracy(self.X_train, self.L_train, self.y_train,
                     num_samples=self.num_train_samples)
-                val_acc = self.check_accuracy(self.X_val, self.y_val,
+                val_acc = self.check_accuracy(self.X_val, self.L_val, self.y_val,
                     num_samples=self.num_val_samples)
                 self.train_acc_history.append(train_acc)
                 self.val_acc_history.append(val_acc)
